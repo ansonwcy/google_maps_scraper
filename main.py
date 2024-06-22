@@ -6,6 +6,7 @@ from dataclasses import dataclass, asdict, field
 import pandas as pd
 import argparse
 import os
+import re
 import sys
 
 @dataclass
@@ -18,6 +19,7 @@ class Business:
     phone_number: str = None
     reviews_count: int = None
     reviews_average: float = None
+    book_link: str = None
     latitude: float = None
     longitude: float = None
 
@@ -125,6 +127,14 @@ def main():
 
             page.keyboard.press("Enter")
             page.wait_for_timeout(5000)
+            
+            if (page.get_by_role("button", name="Rating").count() > 0):
+                page.get_by_role("button", name="Rating").click()
+                page.wait_for_timeout(1000)
+
+                star = page.locator('//div[@data-index="1"]')
+                star.click()
+                page.wait_for_timeout(5000)
 
             # scrolling
             page.hover('//a[contains(@href, "https://www.google.com/maps/place")]')
@@ -134,7 +144,7 @@ def main():
             previously_counted = 0
             while True:
                 page.mouse.wheel(0, 10000)
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(5000)
 
                 if (
                     page.locator(
@@ -175,18 +185,21 @@ def main():
 
             business_list = BusinessList()
 
+            counter = 1
+
             # scraping
             for listing in listings:
                 try:
                     listing.click()
-                    page.wait_for_timeout(5000)
+                    page.wait_for_timeout(2000)
 
                     name_attibute = 'aria-label'
                     address_xpath = '//button[@data-item-id="address"]//div[contains(@class, "fontBodyMedium")]'
                     website_xpath = '//a[@data-item-id="authority"]//div[contains(@class, "fontBodyMedium")]'
                     phone_number_xpath = '//button[contains(@data-item-id, "phone:tel:")]//div[contains(@class, "fontBodyMedium")]'
-                    review_count_xpath = '//button[@jsaction="pane.reviewChart.moreReviews"]//span'
+                    review_count_xpath = '//div[@jsaction="pane.reviewChart.moreReviews"]//span'
                     reviews_average_xpath = '//div[@jsaction="pane.reviewChart.moreReviews"]//div[@role="img"]'
+                    book_link_xpath = '//a[@data-tooltip="Open booking link"]'
                     
                     
                     business = Business()
@@ -204,6 +217,12 @@ def main():
                         business.website = page.locator(website_xpath).all()[0].inner_text()
                     else:
                         business.website = ""
+
+                    if page.locator(book_link_xpath).count() > 0:
+                        business.book_link = page.locator(book_link_xpath).all()[0].get_attribute('href')
+                    else:
+                        business.book_link = ""
+
                     if page.locator(phone_number_xpath).count() > 0:
                         business.phone_number = page.locator(phone_number_xpath).all()[0].inner_text()
                     else:
@@ -233,12 +252,22 @@ def main():
                     business_list.business_list.append(business)
                 except Exception as e:
                     print(f'Error occured: {e}')
+                finally:
+                    print(f'{search_for}:{counter}/{len(listings)}')
+                    counter = counter + 1
             
             #########
             # output
             #########
-            business_list.save_to_excel(f"google_maps_data_{search_for}".replace(' ', '_'))
-            business_list.save_to_csv(f"google_maps_data_{search_for}".replace(' ', '_'))
+            try:
+                search_for_cleaned = re.sub(r'[\\/*?:"<>|\n]', "", search_for)
+                file_name = f"{search_for_cleaned}".replace(' ', '_')
+                business_list.save_to_excel(file_name)
+                business_list.save_to_csv(file_name)
+            except Exception as e:
+                    print(f'Error occured: {e}')
+            finally:
+                print("Excel Done!")
 
         browser.close()
 
